@@ -42,6 +42,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke
 .hrow{display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;opacity:.9}
 .seg{height:14px;border-radius:7px;background:rgba(255,255,255,.12);overflow:hidden;display:flex}
 .seg i{display:block;height:100%;transition:width .35s ease}
+.hcredit{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.16);font-size:13px}
+.hcredit b{font-size:16px;color:#D5C6F5}
+.pill.credit{background:#EBE3FA;color:#6B3FB0;font-style:normal;margin-top:3px}
+.hint{font-size:12px;color:#6B3FB0;background:#EBE3FA;border-radius:10px;padding:8px 10px;margin-top:8px;font-weight:600}
 .legend3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
 .legend3 div{font-size:12px;opacity:.95}
 .legend3 b{display:block;font-size:15px;margin-top:1px}
@@ -125,7 +129,7 @@ details summary{cursor:pointer;color:var(--mute);font-size:13px;margin-top:6px;p
 .mcard{display:block;width:100%;text-align:right;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:14px;margin-bottom:8px}
 .mcard .h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
 .mcard .seg{background:var(--paper);height:10px;margin:8px 0}
-.mcard .row{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.mcard .row{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:space-between;font-size:12px;color:var(--mute)}
 .mcard.sel{border-color:var(--ink)}
 table.cmp{width:100%;border-collapse:collapse;font-size:13px}
 table.cmp th{font-weight:600;color:var(--mute);text-align:right;padding:6px 4px;font-size:12px}
@@ -315,13 +319,15 @@ function save(){
 function setSave(t){const e=$('#saveSt');if(e)e.textContent=t}
 
 /* ---------- calculations (always derived, never hard-coded) ---------- */
+const isCredit=e=>e.payment_method==='credit';
 function calc(m){
   const dues=sum(m.dues.map(d=>d.amount));
-  const exp=sum(m.expenses.map(e=>e.amount));
+  const exp=sum(m.expenses.filter(e=>!isCredit(e)).map(e=>e.amount));
+  const credit=sum(m.expenses.filter(isCredit).map(e=>e.amount));
   const spent=r2(dues+exp);
   const rem=r2((+m.salary||0)-dues-exp);
   const pct=m.salary>0?spent/m.salary*100:0;
-  return{dues,exp,spent,rem,pct};
+  return{dues,exp,credit,spent,rem,pct};
 }
 
 /* ---------- rendering ---------- */
@@ -359,7 +365,7 @@ function renderDashboard(){
   $('#hero').innerHTML='<div class="hero'+neg+'"><div class="lbl">'+label+'</div><div class="big">'+N(c.rem)+'<small>ج.م</small></div>'
     +'<div class="hrow"><span>استهلاك المرتب: '+(sal>0?'<b class="num">'+(Math.round(c.pct*10)/10)+'%</b>':'—')+'</span><span>تم صرف '+N(c.spent)+'</span></div>'
     +'<div class="seg"><i style="width:'+w(c.dues)+'%;background:var(--dues)"></i><i style="width:'+w(c.exp)+'%;background:var(--exp)"></i><i style="width:'+w(c.rem)+'%;background:var(--ok2)"></i></div>'
-    +'<div class="legend3"><div><i class="dot" style="background:var(--dues)"></i>الالتزامات<b>'+N(c.dues)+'</b></div><div><i class="dot" style="background:var(--exp)"></i>المصروفات<b>'+N(c.exp)+'</b></div><div><i class="dot" style="background:var(--ok2)"></i>المتبقي<b>'+N(Math.max(c.rem,0))+'</b></div></div></div>';
+    +'<div class="legend3"><div><i class="dot" style="background:var(--dues)"></i>الالتزامات<b>'+N(c.dues)+'</b></div><div><i class="dot" style="background:var(--exp)"></i>المصروفات<b>'+N(c.exp)+'</b></div><div><i class="dot" style="background:var(--ok2)"></i>المتبقي<b>'+N(Math.max(c.rem,0))+'</b></div></div><div class="hcredit"><span><i class="dot" style="background:#B79BEA"></i>المستخدم من الكريدت <small style="color:inherit;opacity:.6">(مش بيتخصم من المرتب)</small></span><b>'+N(c.credit)+'</b></div></div>';
   /* alerts */
   let al='';
   if(sal>0){
@@ -373,8 +379,10 @@ function renderDashboard(){
   /* body */
   const paid=sum(m.dues.filter(d=>d.status==='paid').map(d=>d.amount)),unpaid=r2(c.dues-paid);
   const t=todayStr();
-  const todayTotal=sum(m.expenses.filter(e=>e.date===t).map(e=>e.amount));
-  const days=new Set(m.expenses.map(e=>e.date)).size;
+  const nc=m.expenses.filter(e=>!isCredit(e));
+  const allExp=sum(m.expenses.map(e=>e.amount));
+  const todayTotal=sum(nc.filter(e=>e.date===t).map(e=>e.amount));
+  const days=new Set(nc.map(e=>e.date)).size;
   const avg=days?r2(c.exp/days):0;
   let limit=null;
   if(c.rem>0){
@@ -387,8 +395,8 @@ function renderDashboard(){
     $('#dashBody').innerHTML=h;return;
   }
   h+='<div class="grid3"><button class="tile tap" data-act="tab" data-tab="dues"><div class="t">📌 الالتزامات ‹</div><div class="v">'+N(c.dues)+'</div><div class="s">مدفوع '+N(paid)+'<br>متبقي '+N(unpaid)+'</div></button>'
-    +'<button class="tile tap" data-act="tab" data-tab="expenses"><div class="t">🛒 المصروفات ‹</div><div class="v">'+N(c.exp)+'</div><div class="s">'+m.expenses.length+' عملية</div></button>'
-    +'<div class="tile"><div class="t">💸 إجمالي المصروف</div><div class="v">'+N(c.spent)+'</div><div class="s">الالتزامات + المصروفات</div></div></div>';
+    +'<button class="tile tap" data-act="tab" data-tab="expenses"><div class="t">🛒 المصروفات ‹</div><div class="v">'+N(c.exp)+'</div><div class="s">'+nc.length+' عملية'+(c.credit>0?'<br>كريدت '+N(c.credit)+' (خارج المرتب)':'')+'</div></button>'
+    +'<div class="tile"><div class="t">💸 إجمالي المصروف</div><div class="v">'+N(c.spent)+'</div><div class="s">الالتزامات + المصروفات (بدون الكريدت)</div></div></div>';
   h+='<div class="grid3"><div class="tile"><div class="t">مصروف النهارده</div><div class="v">'+N(todayTotal)+'</div></div>'
     +'<div class="tile"><div class="t">متوسط الصرف اليومي</div><div class="v">'+N(avg)+'</div></div>'
     +'<div class="tile"><div class="t">الحد اليومي المتاح</div><div class="v">'+(limit==null?'—':N(limit))+'</div></div></div>';
@@ -398,7 +406,7 @@ function renderDashboard(){
   /* categories */
   const cats=Object.keys(CATS).map(k=>({k,label:CATS[k].l,v:sum(m.expenses.filter(e=>e.category===k).map(e=>e.amount)),c:CATS[k].c}));
   const nz=cats.filter(x=>x.v>0).sort((a,b)=>b.v-a.v),mx=nz.length?nz[0].v:0;
-  h+='<div class="card"><h3>المصروفات حسب التصنيف</h3>';
+  h+='<div class="card"><h3>المصروفات حسب التصنيف</h3><small style="display:block;margin:-6px 0 10px">تشمل المصروفات بالكريدت</small>';
   if(nz.length){
     h+='<div class="bars">'+nz.map(x=>'<div class="b"><div class="bt"><span>'+esc(x.label)+'</span><span>'+N(x.v)+'</span></div><div class="tr"><i style="width:'+(x.v/mx*100)+'%;background:'+x.c+'"></i></div></div>').join('')+'</div>';
     h+='<details><summary>ملخص كل التصنيفات</summary><div class="lg">'+cats.map(x=>'<div class="r'+(x.v>0?'':' z')+'"><span>'+esc(x.label)+'</span><span>'+N(x.v)+'</span></div>').join('')+'</div></details>';
@@ -406,7 +414,7 @@ function renderDashboard(){
   h+='</div>';
   /* payments */
   const pays=Object.keys(PAYS).map(k=>({label:PAYS[k].l,v:sum(m.expenses.filter(e=>e.payment_method===k).map(e=>e.amount)),c:PAYS[k].c}));
-  h+='<div class="card"><h3>المصروفات حسب طريقة الدفع</h3>'+(c.exp>0?'<div class="donutwrap">'+donut(pays,fmt(c.exp),'مصروفات')+legend(pays,c.exp)+'</div>':'<div class="emptyc">لا توجد بيانات بعد</div>')+'</div>';
+  h+='<div class="card"><h3>المصروفات حسب طريقة الدفع</h3><small style="display:block;margin:-6px 0 10px">تشمل المصروفات بالكريدت</small>'+(allExp>0?'<div class="donutwrap">'+donut(pays,fmt(allExp),'مصروفات')+legend(pays,allExp)+'</div>':'<div class="emptyc">لا توجد بيانات بعد</div>')+'</div>';
   $('#dashBody').innerHTML=h;
 }
 
@@ -430,14 +438,14 @@ function renderExpenses(){
   const all=cur().expenses,list=filteredExpenses();
   const n=[ui.fCat,ui.fPay,ui.fDate,ui.fMin,ui.fMax].filter(v=>v!=='').length;
   const fc=$('#fCount');fc.hidden=!n;fc.textContent=n;
-  $('#expSum').innerHTML='<span>'+list.length+(list.length!==all.length?' من '+all.length:'')+' مصروف</span><span>الإجمالي '+M$(sum(list.map(e=>e.amount)))+'</span>';
+  const lc=sum(list.filter(isCredit).map(e=>e.amount));$('#expSum').innerHTML='<span>'+list.length+(list.length!==all.length?' من '+all.length:'')+' مصروف</span><span>الإجمالي '+M$(sum(list.map(e=>e.amount)))+(lc>0?' <small>(منها كريدت '+N(lc)+')</small>':'')+'</span>';
   if(!all.length){
     $('#expList').innerHTML='<div class="empty"><b>لم يتم تسجيل أي مصروفات حتى الآن</b><button class="btn sm" data-act="addExp">+ إضافة مصروف</button></div>';return;
   }
   if(!list.length){$('#expList').innerHTML='<div class="empty"><b>مفيش نتائج مطابقة</b><button class="btn ghost sm" data-act="clearFilters">مسح البحث والفلاتر</button></div>';return}
   $('#expList').innerHTML=list.map(e=>{
     const c=CATS[e.category]||CATS.other,p=PAYS[e.payment_method]||PAYS.other;
-    return '<div class="item"><div class="ico" style="background:'+c.c+'26">'+emo(c.l)+'</div><div class="mid"><b>'+esc(e.item_name)+'</b><span>'+esc(txt(c.l))+' · '+esc(p.l)+' · '+dateLabel(e.date)+'</span>'+(e.notes?'<em>'+esc(e.notes)+'</em>':'')+'</div><div class="amt">'+N(e.amount)+'<small>ج.م</small></div><div class="acts"><button data-act="editExp" data-id="'+e.id+'" aria-label="تعديل">'+ICON.edit+'</button><button class="del" data-act="delExp" data-id="'+e.id+'" aria-label="حذف">'+ICON.del+'</button></div></div>';
+    return '<div class="item"><div class="ico" style="background:'+c.c+'26">'+emo(c.l)+'</div><div class="mid"><b>'+esc(e.item_name)+'</b><span>'+esc(txt(c.l))+' · '+esc(p.l)+' · '+dateLabel(e.date)+'</span>'+(e.payment_method==='credit'?'<i class="pill credit">كريدت — خارج المرتب</i>':'')+(e.notes?'<em>'+esc(e.notes)+'</em>':'')+'</div><div class="amt">'+N(e.amount)+'<small>ج.م</small></div><div class="acts"><button data-act="editExp" data-id="'+e.id+'" aria-label="تعديل">'+ICON.edit+'</button><button class="del" data-act="delExp" data-id="'+e.id+'" aria-label="حذف">'+ICON.del+'</button></div></div>';
   }).join('');
 }
 
@@ -465,7 +473,7 @@ function renderHistory(){
     const m=state.months[k],c=calc(m),total=Math.max(+m.salary||0,c.spent),w=v=>total>0?Math.max(0,v)/total*100:0;
     return '<button class="mcard'+(k===state.cur?' sel':'')+'" data-act="pickMonth" data-key="'+k+'" data-go="1"><div class="h"><b>'+monthLabel(k)+'</b><span class="'+(c.rem<0?'dn':'')+'">'+M$(c.rem)+' <small>متبقي</small></span></div>'
       +'<div class="seg"><i style="width:'+w(c.dues)+'%;background:var(--dues)"></i><i style="width:'+w(c.exp)+'%;background:var(--exp)"></i><i style="width:'+w(c.rem)+'%;background:var(--ok2)"></i></div>'
-      +'<div class="row"><span>المرتب '+N(m.salary||0)+'</span><span>التزامات '+N(c.dues)+'</span><span>مصروفات '+N(c.exp)+'</span><span>إجمالي '+N(c.spent)+'</span></div></button>';
+      +'<div class="row"><span>المرتب '+N(m.salary||0)+'</span><span>التزامات '+N(c.dues)+'</span><span>مصروفات '+N(c.exp)+'</span><span>إجمالي '+N(c.spent)+'</span>'+(c.credit>0?'<span>كريدت '+N(c.credit)+'</span>':'')+'</div></button>';
   }).join('');
   h+='<div class="sec-title">مقارنة شهرين</div>';
   if(keys.length<2){h+='<div class="empty">محتاج شهرين على الأقل عشان تقارن — أنشئ شهر جديد من اسم الشهر فوق</div>'}
@@ -475,7 +483,7 @@ function renderHistory(){
     const A=calc(state.months[ui.cmpA]),B=calc(state.months[ui.cmpB]);
     const sa=+state.months[ui.cmpA].salary||0,sb=+state.months[ui.cmpB].salary||0;
     const opt=sel=>keys.map(k=>'<option value="'+k+'"'+(k===sel?' selected':'')+'>'+monthLabel(k)+'</option>').join('');
-    const rows=[['المرتب',sa,sb,1],['الالتزامات',A.dues,B.dues,-1],['المصروفات اليومية',A.exp,B.exp,-1],['إجمالي المصروف',A.spent,B.spent,-1],['المتبقي',A.rem,B.rem,1]];
+    const rows=[['المرتب',sa,sb,1],['الالتزامات',A.dues,B.dues,-1],['المصروفات اليومية',A.exp,B.exp,-1],['إجمالي المصروف',A.spent,B.spent,-1],['المتبقي',A.rem,B.rem,1],['كريدت (خارج المرتب)',A.credit,B.credit,-1]];
     h+='<div class="card"><div class="two"><label class="l">من<select class="inp" data-cmp="cmpA">'+opt(ui.cmpA)+'</select></label><label class="l">إلى<select class="inp" data-cmp="cmpB">'+opt(ui.cmpB)+'</select></label></div>'
       +'<table class="cmp"><tr><th></th><th>'+MN[+ui.cmpA.split('-')[1]-1]+'</th><th>'+MN[+ui.cmpB.split('-')[1]-1]+'</th><th>الفرق</th></tr>'
       +rows.map(r=>{const d=r2(r[2]-r[1]);const good=d===0?'':((d*r[3])>0?'up':'dn');return '<tr><td>'+r[0]+'</td><td>'+N(r[1])+'</td><td>'+N(r[2])+'</td><td class="'+good+'">'+(d>0?'+':'')+N(d)+'</td></tr>'}).join('')
@@ -502,7 +510,7 @@ function expenseSheet(id){
     +'<div class="l" style="font-weight:600;font-size:13px;margin-bottom:12px">التصنيف'+chips('cat',CATS,e?e.category:ui.lastCat)+'</div>'
     +'<div class="two"><label class="l">المبلغ المدفوع<input class="inp" id="f-amt" type="number" inputmode="decimal" min="0" placeholder="0" value="'+(e?e.amount:'')+'"></label>'
     +'<label class="l">التاريخ<input class="inp" id="f-date" type="date" min="'+first+'" max="'+last+'" value="'+(e?e.date:defaultDate())+'"></label></div>'
-    +'<div class="l" style="font-weight:600;font-size:13px;margin-bottom:12px">طريقة الدفع'+chips('pay',PAYS,e?e.payment_method:ui.lastPay)+'</div>'
+    +'<div class="l" style="font-weight:600;font-size:13px;margin-bottom:12px">طريقة الدفع'+chips('pay',PAYS,e?e.payment_method:ui.lastPay)+'<div class="hint" id="f-hint"'+((e?e.payment_method:ui.lastPay)==='credit'?'':' hidden')+'>💳 الكريدت مش بيتخصم من المرتب، وبيظهر في "المستخدم من الكريدت"</div></div>'
     +'<label class="l">ملاحظات<input class="inp" id="f-notes" placeholder="ملاحظات اختيارية" value="'+esc(e?e.notes:'')+'" dir="auto"></label>'
     +'<div class="err" id="f-err"></div><button class="btn full" data-act="saveExp" data-id="'+(e?e.id:'')+'">'+(e?'حفظ التعديل':'إضافة المصروف')+'</button>');
   setTimeout(()=>{const f=$('#f-name');if(f&&!e)f.focus()},60);
@@ -604,7 +612,7 @@ document.addEventListener('click',ev=>{
     case 'togglePaid':{const d=mut().dues.find(x=>x.id===id);if(d){d.status=d.status==='paid'?'unpaid':'paid';commit(d.status==='paid'?'تم تحديده كمدفوع':'رجع غير مدفوع')}break}
     case 'saveExp':saveExp(id);break;
     case 'saveDue':saveDue(id);break;
-    case 'chip':{const p=t.parentElement;p.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));t.classList.add('on');break}
+    case 'chip':{const p=t.parentElement;p.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));t.classList.add('on');if(p.dataset.name==='pay'){const h=$('#f-hint');if(h)h.hidden=t.dataset.v!=='credit'}break}
     case 'closeSheet':closeSheet();break;
     case 'pickMonth':state.cur=t.dataset.key;closeSheet();refresh();if(t.dataset.go)setTab('dashboard');break;
     case 'newMonth':newMonth();break;
